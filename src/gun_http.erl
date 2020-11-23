@@ -333,7 +333,7 @@ request(State=#http_state{socket=Socket, transport=Transport, version=Version,
 		out=head}, StreamRef, ReplyTo, Method, Host, Port, Path, Headers) ->
 	Host2 = case Host of
 		{local, _SocketPath} -> <<>>;
-		Tuple when is_tuple(Tuple) -> inet:ntoa(Tuple);
+		Tuple when is_tuple(Tuple) -> inet_to_http_host(Tuple);
 		_ -> Host
 	end,
 	Headers2 = lists:keydelete(<<"transfer-encoding">>, 1, Headers),
@@ -357,7 +357,7 @@ request(State=#http_state{socket=Socket, transport=Transport, version=Version,
 		out=head}, StreamRef, ReplyTo, Method, Host, Port, Path, Headers, Body) ->
 	Host2 = case Host of
 		{local, _SocketPath} -> <<>>;
-		Tuple when is_tuple(Tuple) -> inet:ntoa(Tuple);
+		Tuple when is_tuple(Tuple) -> inet_to_http_host(Tuple);
 		_ -> Host
 	end,
 	Headers2 = lists:keydelete(<<"content-length">>, 1,
@@ -423,6 +423,11 @@ data(State=#http_state{socket=Socket, transport=Transport, version=Version,
 			error_stream_not_found(State, StreamRef, ReplyTo)
 	end.
 
+inet_to_http_host(Tuple) when tuple_size(Tuple) =:= 8 ->
+    ["[", inet:ntoa(Tuple), "]"];
+inet_to_http_host(Tuple) ->
+    inet:ntoa(Tuple).
+
 connect(State=#http_state{streams=Streams}, StreamRef, ReplyTo, _, _) when Streams =/= [] ->
 	ReplyTo ! {gun_error, self(), StreamRef, {badstate,
 		"CONNECT can only be used with HTTP/1.1 when no other streams are active."}},
@@ -430,7 +435,7 @@ connect(State=#http_state{streams=Streams}, StreamRef, ReplyTo, _, _) when Strea
 connect(State=#http_state{socket=Socket, transport=Transport, version=Version},
 		StreamRef, ReplyTo, Destination=#{host := Host0}, Headers0) ->
 	Host = case Host0 of
-		Tuple when is_tuple(Tuple) -> inet:ntoa(Tuple);
+		Tuple when is_tuple(Tuple) -> inet_to_http_host(Tuple);
 		_ -> Host0
 	end,
 	Port = maps:get(port, Destination, 1080),
