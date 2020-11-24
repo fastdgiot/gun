@@ -1,0 +1,16 @@
+{"1.3.4",
+ [
+    {<<"1.3.*">>, [
+        {load_module, gun, brutal_purge, soft_purge, []},
+        {load_module, gun_http, brutal_purge, soft_purge, []},
+        {load_module, gun_http2, brutal_purge, soft_purge, []}
+    ]}
+ ],
+ [
+    {<<"1.3.*">>, [
+        {load_module, gun, brutal_purge, soft_purge, []},
+        {load_module, gun_http, brutal_purge, soft_purge, []},
+        {load_module, gun_http2, brutal_purge, soft_purge, []}
+    ]}
+ ]
+}.
