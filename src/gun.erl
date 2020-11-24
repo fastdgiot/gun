@@ -583,7 +583,7 @@ flush_pid(ServerPid) ->
 flush_ref(StreamRef) ->
 	receive
 		{gun_inform, _, StreamRef, _, _} ->
-			flush_pid(StreamRef);
+			flush_ref(StreamRef);
 		{gun_response, _, StreamRef, _, _, _} ->
 			flush_ref(StreamRef);
 		{gun_data, _, StreamRef, _, _} ->
