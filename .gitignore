@@ -7,5 +7,7 @@ doc/html
 doc/man*
 ebin/test
 ebin/*.beam
+ebin/*.app
+ebin/*.appup
 logs
 test/*.beam
