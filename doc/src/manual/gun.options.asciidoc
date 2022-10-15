@@ -19,9 +19,9 @@ options(ConnPid, Path, Headers, ReqOpts)
 
 ConnPid   :: pid()
 Path      :: iodata()
-Headers   :: gun:req_headers()
+Headers   :: [{binary(), iodata()}]
 ReqOpts   :: gun:req_opts()
-StreamRef :: gun:stream_ref()
+StreamRef :: reference()
 ----
 
 Query the capabilities of the server or a resource.

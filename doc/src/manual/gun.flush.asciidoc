@@ -12,7 +12,7 @@ flush(ConnPid) -> ok
 flush(StreamRef) -> ok
 
 ConnPid    :: pid()
-StreamRef  :: gun:stream_ref()
+StreamRef  :: reference()
 ----
 
 Flush all messages related to a connection or a stream.

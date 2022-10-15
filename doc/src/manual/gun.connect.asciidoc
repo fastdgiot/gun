@@ -19,9 +19,9 @@ connect(ConnPid, Destination, Headers, ReqOpts)
 
 ConnPid     :: pid()
 Destination :: gun:connect_destination()
-Headers     :: gun:req_headers()
+Headers     :: [{binary(), iodata()}]
 ReqOpts     :: gun:req_opts()
-StreamRef   :: gun:stream_ref()
+StreamRef   :: reference()
 ----
 
 Establish a tunnel to the origin server.

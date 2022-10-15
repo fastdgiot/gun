@@ -11,7 +11,7 @@ gun_data - Response body
 {gun_data, ConnPid, StreamRef, IsFin, Data}
 
 ConnPid   :: pid()
-StreamRef :: gun:stream_ref()
+StreamRef :: reference()
 IsFin     :: fin | nofin
 Data      :: binary()
 ----
@@ -72,7 +72,6 @@ link:man:gun:post(3)[gun:post(3)],
 link:man:gun:put(3)[gun:put(3)],
 link:man:gun:delete(3)[gun:delete(3)],
 link:man:gun:options(3)[gun:options(3)],
-link:man:gun:headers(3)[gun:headers(3)],
 link:man:gun:request(3)[gun:request(3)],
 link:man:gun_response(3)[gun_response(3)],
 link:man:gun_trailers(3)[gun_trailers(3)]

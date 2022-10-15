@@ -9,15 +9,11 @@ gun:open - Open a connection to the given host and port
 [source,erlang]
 ----
 open(Host, Port)       -> open(Host, Port, #{})
-open(Host, Port, Opts) -> {ok, pid()} | {error, Reason}
+open(Host, Port, Opts) -> {ok, pid()} | {error, any()}
 
-Host    :: inet:hostname() | inet:ip_address()
-Port    :: inet:port_number()
-Opts    :: gun:opts()
-Reason  :: {options, OptName}
-         | {options, {http | http2 | socks | ws, OptName}}
-         | any()
-OptName :: atom()
+Host :: inet:hostname() | inet:ip_address()
+Port :: inet:port_number()
+Opts :: gun:opts()
 ----
 
 Open a connection to the given host and port.
@@ -73,5 +69,4 @@ message will be sent for that.
 link:man:gun(3)[gun(3)],
 link:man:gun:open_unix(3)[gun:open_unix(3)],
 link:man:gun:await_up(3)[gun:await_up(3)],
-link:man:gun_tunnel_up(3)[gun_tunnel_up(3)],
 link:man:gun_up(3)[gun_up(3)]

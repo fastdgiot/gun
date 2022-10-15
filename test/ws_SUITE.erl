@@ -1,4 +1,4 @@
-%% Copyright (c) 2018-2020, Loïc Hoguin <essen@ninenines.eu>
+%% Copyright (c) 2015-2018, Loïc Hoguin <essen@ninenines.eu>
 %%
 %% Permission to use, copy, modify, and/or distribute this software for any
 %% purpose with or without fee is hereby granted, provided that the above
@@ -17,214 +17,152 @@
 -compile(nowarn_export_all).
 
 -import(ct_helper, [config/2]).
--import(ct_helper, [doc/1]).
 
 %% ct.
 
 all() ->
-	[{group, http}, {group, http2}].
+	[{group, autobahn}].
 
 groups() ->
-	Tests = ct_helper:all(?MODULE),
-	HTTP1Tests = [
-		http10_upgrade_error,
-		http11_request_error,
-		http11_keepalive,
-		http11_keepalive_default_silence_pings
-	],
-	[
-		{http, [], Tests},
-		{http2, [], Tests -- HTTP1Tests}
-	].
+	[{autobahn, [], [autobahn_fuzzingserver]}].
 
-init_per_suite(Config) ->
-	Routes = [
-		{"/", ws_echo_h, []},
-		{"/reject", ws_reject_h, []}
-	],
-	{ok, _} = cowboy:start_clear(ws, [], #{
-		enable_connect_protocol => true,
-		env => #{dispatch => cowboy_router:compile([{'_', Routes}])}
-	}),
-	Port = ranch:get_port(ws),
-	[{port, Port}|Config].
+init_per_group(autobahn, Config) ->
+	%% Some systems have it named pip2.
+	Out = os:cmd("pip show autobahntestsuite ; pip2 show autobahntestsuite"),
+	case string:str(Out, "autobahntestsuite") of
+		0 ->
+			ct:pal("Skipping the autobahn group because the "
+				"Autobahn Test Suite is not installed.~nTo install it, "
+				"please follow the instructions on this page:~n~n    "
+				"http://autobahn.ws/testsuite/installation.html"),
+			{skip, "Autobahn Test Suite not installed."};
+		_ ->
+			Config
+	end.
 
-end_per_suite(_) ->
-	cowboy:stop_listener(ws).
+end_per_group(_, _) ->
+	ok.
 
 %% Tests.
 
-await(Config) ->
-	doc("Ensure gun:await/2 can be used to receive Websocket frames."),
-	Protocol = config(name, config(tc_group_properties, Config)),
-	{ok, ConnPid} = gun:open("localhost", config(port, Config), #{
-		protocols => [Protocol],
-		http2_opts => #{notify_settings_changed => true}
-	}),
-	{ok, Protocol} = gun:await_up(ConnPid),
-	do_await_enable_connect_protocol(Protocol, ConnPid),
-	StreamRef = gun:ws_upgrade(ConnPid, "/", []),
-	{upgrade, [<<"websocket">>], _} = gun:await(ConnPid, StreamRef),
-	Frame = {text, <<"Hello!">>},
-	gun:ws_send(ConnPid, StreamRef, Frame),
-	{ws, Frame} = gun:await(ConnPid, StreamRef),
-	gun:close(ConnPid).
-
-headers_normalized_upgrade(Config) ->
-	doc("Headers passed to ws_upgrade are normalized before being used."),
-	Protocol = config(name, config(tc_group_properties, Config)),
-	{ok, ConnPid} = gun:open("localhost", config(port, Config), #{
-		protocols => [Protocol],
-		http2_opts => #{notify_settings_changed => true}
-	}),
-	{ok, Protocol} = gun:await_up(ConnPid),
-	do_await_enable_connect_protocol(Protocol, ConnPid),
-	StreamRef = gun:ws_upgrade(ConnPid, "/", #{
-		atom_header_name => <<"value">>,
-		"string_header_name" => <<"value">>
-	}),
-	{upgrade, [<<"websocket">>], _} = gun:await(ConnPid, StreamRef),
-	gun:close(ConnPid).
-
-http10_upgrade_error(Config) ->
-	doc("Attempting to upgrade HTTP/1.0 to Websocket produces an error."),
-	{ok, ConnPid} = gun:open("localhost", config(port, Config), #{
-		http_opts => #{version => 'HTTP/1.0'}
-	}),
-	{ok, _} = gun:await_up(ConnPid),
-	StreamRef = gun:ws_upgrade(ConnPid, "/", []),
-	receive
-		{gun_error, ConnPid, StreamRef, {badstate, _}} ->
-			gun:close(ConnPid);
-		Msg ->
-			error({fail, Msg})
-	after 1000 ->
-		error(timeout)
-	end.
-
-http11_keepalive(Config) ->
-	doc("Ensure that Gun automatically sends ping frames."),
-	{ok, ConnPid} = gun:open("localhost", config(port, Config), #{
-		ws_opts => #{
-			keepalive => 100,
-			silence_pings => false
-		}
-	}),
-	{ok, _} = gun:await_up(ConnPid),
-	StreamRef = gun:ws_upgrade(ConnPid, "/", []),
-	{upgrade, [<<"websocket">>], _} = gun:await(ConnPid, StreamRef),
-	%% Gun sent a ping automatically, we therefore receive a pong.
-	{ws, pong} = gun:await(ConnPid, StreamRef),
-	gun:close(ConnPid).
-
-http11_keepalive_default_silence_pings(Config) ->
-	doc("Ensure that Gun does not forward ping/pong by default."),
-	{ok, ConnPid} = gun:open("localhost", config(port, Config), #{
-		ws_opts => #{keepalive => 100}
-	}),
-	{ok, _} = gun:await_up(ConnPid),
-	StreamRef = gun:ws_upgrade(ConnPid, "/", []),
-	{upgrade, [<<"websocket">>], _} = gun:await(ConnPid, StreamRef),
-	%% Gun sent a ping automatically, but we silence ping/pong by default.
-	{error, timeout} = gun:await(ConnPid, StreamRef, 1000),
-	gun:close(ConnPid).
-
-http11_request_error(Config) ->
-	doc("Ensure that HTTP/1.1 requests are rejected while using Websocket."),
-	{ok, ConnPid} = gun:open("localhost", config(port, Config)),
-	{ok, _} = gun:await_up(ConnPid),
-	StreamRef1 = gun:ws_upgrade(ConnPid, "/", []),
-	{upgrade, [<<"websocket">>], _} = gun:await(ConnPid, StreamRef1),
-	StreamRef2 = gun:get(ConnPid, "/"),
-	{error, {connection_error, {badstate, _}}} = gun:await(ConnPid, StreamRef2),
-	gun:close(ConnPid).
-
-reject_upgrade(Config) ->
-	doc("Ensure Websocket connections can be rejected."),
-	Protocol = config(name, config(tc_group_properties, Config)),
-	{ok, ConnPid} = gun:open("localhost", config(port, Config), #{
-		protocols => [Protocol],
-		http2_opts => #{notify_settings_changed => true}
-	}),
-	{ok, Protocol} = gun:await_up(ConnPid),
-	do_await_enable_connect_protocol(Protocol, ConnPid),
-	StreamRef = gun:ws_upgrade(ConnPid, "/reject", []),
-	receive
-		{gun_response, ConnPid, StreamRef, nofin, 400, _} ->
-			{ok, <<"Upgrade rejected">>} = gun:await_body(ConnPid, StreamRef, 1000),
-			gun:close(ConnPid);
-		Msg ->
-			error({fail, Msg})
-	after 1000 ->
-		error(timeout)
-	end.
-
-reply_to(Config) ->
-	doc("Ensure the reply_to request option is respected."),
+autobahn_fuzzingserver(Config) ->
 	Self = self(),
-	Frame = {text, <<"Hello!">>},
-	ReplyTo = spawn(fun() ->
-		{ConnPid, StreamRef} = receive Msg -> Msg after 1000 -> error(timeout) end,
-		{upgrade, [<<"websocket">>], _} = gun:await(ConnPid, StreamRef),
-		Self ! {self(), ready},
-		{ws, Frame} = gun:await(ConnPid, StreamRef),
-		Self ! {self(), ok}
-	end),
-	Protocol = config(name, config(tc_group_properties, Config)),
-	{ok, ConnPid} = gun:open("localhost", config(port, Config), #{
-		protocols => [Protocol],
-		http2_opts => #{notify_settings_changed => true}
-	}),
-	{ok, Protocol} = gun:await_up(ConnPid),
-	do_await_enable_connect_protocol(Protocol, ConnPid),
-	StreamRef = gun:ws_upgrade(ConnPid, "/", [], #{reply_to => ReplyTo}),
-	ReplyTo ! {ConnPid, StreamRef},
-	receive {ReplyTo, ready} -> gun:ws_send(ConnPid, StreamRef, Frame) after 1000 -> error(timeout) end,
-	receive {ReplyTo, ok} -> gun:close(ConnPid) after 1000 -> error(timeout) end.
+	spawn_link(fun() -> start_port(Config, Self) end),
+	receive autobahn_ready -> ok end,
+	N = get_case_count(),
+	run_cases(0, N),
+	Report = config(priv_dir, Config) ++ "reports/clients/index.html",
+	ct:log("<h2><a href=\"~s\">Full report</a></h2>~n", [Report]),
+	ct:print("Autobahn Test Suite report: file://~s~n", [Report]),
+	log_output(),
+	terminate(),
+	{ok, HTML} = file:read_file(Report),
+	case length(binary:matches(HTML, <<"case_failed">>)) > 2 of
+		true -> error(failed);
+		false -> ok
+	end.
 
-send_many(Config) ->
-	doc("Ensure we can send a list of frames in one gun:ws_send call."),
-	Protocol = config(name, config(tc_group_properties, Config)),
-	{ok, ConnPid} = gun:open("localhost", config(port, Config), #{
-		protocols => [Protocol],
-		http2_opts => #{notify_settings_changed => true}
-	}),
-	{ok, Protocol} = gun:await_up(ConnPid),
-	do_await_enable_connect_protocol(Protocol, ConnPid),
-	StreamRef = gun:ws_upgrade(ConnPid, "/", []),
-	{upgrade, [<<"websocket">>], _} = gun:await(ConnPid, StreamRef),
-	Frame1 = {text, <<"Hello!">>},
-	Frame2 = {binary, <<"World!">>},
-	gun:ws_send(ConnPid, StreamRef, [Frame1, Frame2]),
-	{ws, Frame1} = gun:await(ConnPid, StreamRef),
-	{ws, Frame2} = gun:await(ConnPid, StreamRef),
-	gun:close(ConnPid).
+start_port(Config, Pid) ->
+	Port = open_port({spawn, "wstest -m fuzzingserver -s " ++ config(data_dir, Config) ++ "server.json"},
+		[{line, 10000}, {cd, config(priv_dir, Config)}, binary]),
+	receive_preamble(Port, Pid),
+	receive_infinity(Port).
 
-send_many_close(Config) ->
-	doc("Ensure we can send a list of frames in one gun:ws_send call, including a close frame."),
-	Protocol = config(name, config(tc_group_properties, Config)),
-	{ok, ConnPid} = gun:open("localhost", config(port, Config), #{
-		protocols => [Protocol],
-		http2_opts => #{notify_settings_changed => true}
-	}),
-	{ok, Protocol} = gun:await_up(ConnPid),
-	do_await_enable_connect_protocol(Protocol, ConnPid),
-	StreamRef = gun:ws_upgrade(ConnPid, "/", []),
-	{upgrade, [<<"websocket">>], _} = gun:await(ConnPid, StreamRef),
-	Frame1 = {text, <<"Hello!">>},
-	Frame2 = {binary, <<"World!">>},
-	gun:ws_send(ConnPid, StreamRef, [Frame1, Frame2, close]),
-	{ws, Frame1} = gun:await(ConnPid, StreamRef),
-	{ws, Frame2} = gun:await(ConnPid, StreamRef),
-	{ws, close} = gun:await(ConnPid, StreamRef),
-	gun:close(ConnPid).
+receive_preamble(Port, Pid) ->
+	receive
+		{Port, {data, {eol, Line = <<"Ok, will run", _/bits>>}}} ->
+			Pid ! autobahn_ready,
+			io:format(user, "~s~n", [Line]);
+		{Port, {data, {eol, Line}}} ->
+			io:format(user, "~s~n", [Line]),
+			receive_preamble(Port, Pid)
+	after 5000 ->
+		terminate(),
+		error(timeout)
+	end.
 
-%% Internal.
+receive_infinity(Port) ->
+	receive
+		{Port, {data, {eol, <<"Updating reports", _/bits>>}}} ->
+			receive_infinity(Port);
+		{Port, {data, {eol, Line}}} ->
+			io:format(user, "~s~n", [Line]),
+			receive_infinity(Port)
+	end.
 
-do_await_enable_connect_protocol(http, _) ->
+get_case_count() ->
+	{Pid, MRef, StreamRef} = connect("/getCaseCount"),
+	receive
+		{gun_ws, Pid, StreamRef, {text, N}} ->
+			close(Pid, MRef),
+			binary_to_integer(N);
+		Msg ->
+			ct:pal("Unexpected message ~p", [Msg]),
+			terminate(),
+			error(failed)
+	end.
+
+run_cases(Total, Total) ->
 	ok;
-%% We cannot do a CONNECT :protocol request until the server tells us we can.
-do_await_enable_connect_protocol(http2, ConnPid) ->
-	{notify, settings_changed, #{enable_connect_protocol := true}}
-		= gun:await(ConnPid, undefined), %% @todo Maybe have a gun:await/1?
+run_cases(N, Total) ->
+	{Pid, MRef, StreamRef} = connect(["/runCase?case=", integer_to_binary(N + 1), "&agent=Gun"]),
+	loop(Pid, MRef, StreamRef),
+	update_reports(),
+	run_cases(N + 1, Total).
+
+loop(Pid, MRef, StreamRef) ->
+	receive
+		{gun_ws, Pid, StreamRef, close} ->
+			gun:ws_send(Pid, close),
+			loop(Pid, MRef, StreamRef);
+		{gun_ws, Pid, StreamRef, {close, Code, _}} ->
+			gun:ws_send(Pid, {close, Code, <<>>}),
+			loop(Pid, MRef, StreamRef);
+		{gun_ws, Pid, StreamRef, Frame} ->
+			gun:ws_send(Pid, Frame),
+			loop(Pid, MRef, StreamRef);
+		{gun_down, Pid, ws, _, _, _} ->
+			close(Pid, MRef);
+		{'DOWN', MRef, process, Pid, normal} ->
+			close(Pid, MRef);
+		Msg ->
+			ct:pal("Unexpected message ~p", [Msg]),
+			close(Pid, MRef)
+	end.
+
+update_reports() ->
+	{Pid, MRef, StreamRef} = connect("/updateReports?agent=Gun"),
+	receive
+		{gun_ws, Pid, StreamRef, close} ->
+			close(Pid, MRef)
+	after 5000 ->
+		error(failed)
+	end.
+
+log_output() ->
+	ok.
+
+connect(Path) ->
+	{ok, Pid} = gun:open("127.0.0.1", 33080, #{retry => 0}),
+	{ok, http} = gun:await_up(Pid),
+	MRef = monitor(process, Pid),
+	StreamRef = gun:ws_upgrade(Pid, Path, [], #{compress => true}),
+	receive
+		{gun_upgrade, Pid, StreamRef, [<<"websocket">>], _} ->
+			ok;
+		Msg ->
+			ct:pal("Unexpected message ~p", [Msg]),
+			terminate(),
+			error(failed)
+	end,
+	{Pid, MRef, StreamRef}.
+
+close(Pid, MRef) ->
+	demonitor(MRef),
+	gun:close(Pid),
+	gun:flush(Pid).
+
+terminate() ->
+	Res = os:cmd("killall wstest"),
+	io:format(user, "~s", [Res]),
 	ok.

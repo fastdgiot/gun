@@ -15,11 +15,6 @@ init(Req, State) ->
 info(timeout, Req, State) ->
 	erlang:send_after(1000, self(), timeout),
 	cowboy_req:stream_events(#{
-		data => data(State)
+		data => cowboy_clock:rfc1123()
 	}, nofin, Req),
 	{ok, Req, State}.
-
-data(date) ->
-	cowboy_clock:rfc1123();
-data(Size) when is_integer(Size) ->
-	lists:duplicate(Size, $0).

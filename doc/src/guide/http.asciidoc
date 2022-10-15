@@ -15,7 +15,7 @@ Stream references use the Erlang _reference_ data type and
 are therefore unique.
 
 Streams can be canceled at any time. This will stop any further
-messages from being sent to the calling process. Depending on
+messages from being sent to the owner process. Depending on
 its capabilities, the server will also be instructed to cancel
 the request.
 
@@ -108,7 +108,7 @@ desirable. The request body of a PATCH method may be a partial
 representation or a list of instructions on how to update the
 resource.
 
-The functions `gun:post/4,5`, `gun:put/4,5` and `gun:patch/4,5`
+The `gun:post/4,5`, `gun:put/4,5` and `gun:patch/4,5` functions
 take a body as their fourth argument. These functions do
 not require any body-specific header to be set, although
 it is always recommended to set the content-type header.
@@ -127,9 +127,13 @@ StreamRef = gun:post(ConnPid, "/organizations/ninenines", [
 ], Body).
 ----
 
-The functions `gun:post/3,4`, `gun:put/3,4` and `gun:patch/3,4`
-do not take a body in their arguments: the body must be
-provided later on using the `gun:data/4` function.
+The `gun:post/3`, `gun:put/3` and `gun:patch/3` functions
+do not take a body in their arguments. If a body is to be
+provided later on, using the `gun:data/4` function, then
+the request headers must indicate this. This can be done
+by setting the content-length or content-type request
+headers. If these headers are not set then Gun will assume
+the request has no body.
 
 It is recommended to send the content-length header if you
 know it in advance, although this is not required. If it
@@ -218,22 +222,21 @@ StreamRef = gun:options(ConnPid, "*").
 
 ==== Requests with an arbitrary method
 
-The functions `gun:headers/4,5` or `gun:request/5,6` can be
-used to send requests with a configurable method name. It is
-mostly useful when you need a method that Gun does not
-understand natively.
+The `gun:request/4,5,6` function can be used to send requests
+with a configurable method name. It is mostly useful when you
+need a method that Gun does not understand natively.
 
 .Example of a TRACE request
 [source,erlang]
 ----
 gun:request(ConnPid, "TRACE", "/", [
     {<<"max-forwards">>, "30"}
-], <<>>).
+]).
 ----
 
 === Processing responses
 
-All data received from the server is sent to the calling
+All data received from the server is sent to the owner
 process as a message. First a `gun_response` message is sent,
 followed by zero or more `gun_data` messages. If something goes wrong,
 a `gun_error` message is sent instead.

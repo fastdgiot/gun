@@ -11,8 +11,8 @@ gun_push - Server-initiated push
 {gun_push, ConnPid, StreamRef, NewStreamRef, Method, URI, Headers}
 
 ConnPid      :: pid()
-StreamRef    :: gun:stream_ref()
-NewStreamRef :: gun:stream_ref()
+StreamRef    :: reference()
+NewStreamRef :: reference()
 Method       :: binary()
 URI          :: binary()
 Headers      :: [{binary(), binary()}]
