@@ -16,10 +16,6 @@
 -compile(export_all).
 -compile(nowarn_export_all).
 
--ifdef(OTP_RELEASE).
--compile({nowarn_deprecated_function, [{ssl, ssl_accept, 2}]}).
--endif.
-
 -import(ct_helper, [doc/1]).
 -import(gun_test, [init_origin/1]).
 -import(gun_test, [init_origin/2]).
@@ -65,8 +61,8 @@ do_proxy_init(Parent, Transport, Status, ConnectRespHeaders, Delay) ->
 			gen_tcp:accept(ListenSocket, infinity);
 		gun_tls ->
 			{ok, ClientSocket0} = ssl:transport_accept(ListenSocket, infinity),
-			ssl:ssl_accept(ClientSocket0, infinity),
-			{ok, ClientSocket0}
+			{ok, ClientSocket1} = ssl:handshake(ClientSocket0, infinity),
+			{ok, ClientSocket1}
 	end,
 	{ok, Data} = case Transport of
 		gun_tcp ->
@@ -150,12 +146,16 @@ do_connect_http(OriginScheme, OriginTransport, ProxyTransport) ->
 	{ok, OriginPid, OriginPort} = init_origin(OriginTransport, http),
 	{ok, ProxyPid, ProxyPort} = do_proxy_start(ProxyTransport),
 	Authority = iolist_to_binary(["localhost:", integer_to_binary(OriginPort)]),
-	{ok, ConnPid} = gun:open("localhost", ProxyPort, #{transport => ProxyTransport}),
+	{ok, ConnPid} = gun:open("localhost", ProxyPort, #{
+		transport => ProxyTransport,
+		tls_opts => [{verify, verify_none}, {versions, ['tlsv1.2']}]
+	}),
 	{ok, http} = gun:await_up(ConnPid),
 	StreamRef = gun:connect(ConnPid, #{
 		host => "localhost",
 		port => OriginPort,
-		transport => OriginTransport
+		transport => OriginTransport,
+		tls_opts => [{verify, verify_none}, {versions, ['tlsv1.2']}]
 	}),
 	{request, <<"CONNECT">>, Authority, 'HTTP/1.1', _} = receive_from(ProxyPid),
 	{response, fin, 200, _} = gun:await(ConnPid, StreamRef),
@@ -205,12 +205,16 @@ do_connect_h2(OriginScheme, OriginTransport, ProxyTransport) ->
 	{ok, OriginPid, OriginPort} = init_origin(OriginTransport, http2),
 	{ok, ProxyPid, ProxyPort} = do_proxy_start(ProxyTransport),
 	Authority = iolist_to_binary(["localhost:", integer_to_binary(OriginPort)]),
-	{ok, ConnPid} = gun:open("localhost", ProxyPort, #{transport => ProxyTransport}),
+	{ok, ConnPid} = gun:open("localhost", ProxyPort, #{
+		transport => ProxyTransport,
+		tls_opts => [{verify, verify_none}, {versions, ['tlsv1.2']}]
+	}),
 	{ok, http} = gun:await_up(ConnPid),
 	StreamRef = gun:connect(ConnPid, #{
 		host => "localhost",
 		port => OriginPort,
 		transport => OriginTransport,
+		tls_opts => [{verify, verify_none}, {versions, ['tlsv1.2']}],
 		protocols => [http2]
 	}),
 	{request, <<"CONNECT">>, Authority, 'HTTP/1.1', _} = receive_from(ProxyPid),
@@ -251,14 +255,16 @@ do_connect_through_multiple_proxies(OriginScheme, OriginTransport, ProxiesTransp
 	{ok, Proxy1Pid, Proxy1Port} = do_proxy_start(ProxiesTransport),
 	{ok, Proxy2Pid, Proxy2Port} = do_proxy_start(ProxiesTransport),
 	{ok, ConnPid} = gun:open("localhost", Proxy1Port, #{
-		transport => ProxiesTransport
+		transport => ProxiesTransport,
+		tls_opts => [{verify, verify_none}, {versions, ['tlsv1.2']}]
 	}),
 	{ok, http} = gun:await_up(ConnPid),
 	Authority1 = iolist_to_binary(["localhost:", integer_to_binary(Proxy2Port)]),
 	StreamRef1 = gun:connect(ConnPid, #{
 		host => "localhost",
 		port => Proxy2Port,
-		transport => ProxiesTransport
+		transport => ProxiesTransport,
+		tls_opts => [{verify, verify_none}, {versions, ['tlsv1.2']}]
 	}),
 	{request, <<"CONNECT">>, Authority1, 'HTTP/1.1', _} = receive_from(Proxy1Pid),
 	{response, fin, 200, _} = gun:await(ConnPid, StreamRef1),
@@ -267,7 +273,8 @@ do_connect_through_multiple_proxies(OriginScheme, OriginTransport, ProxiesTransp
 	StreamRef2 = gun:connect(ConnPid, #{
 		host => "localhost",
 		port => OriginPort,
-		transport => OriginTransport
+		transport => OriginTransport,
+		tls_opts => [{verify, verify_none}, {versions, ['tlsv1.2']}]
 	}, [], #{tunnel => StreamRef1}),
 	{request, <<"CONNECT">>, Authority2, 'HTTP/1.1', _} = receive_from(Proxy2Pid),
 	{response, fin, 200, _} = gun:await(ConnPid, StreamRef2),

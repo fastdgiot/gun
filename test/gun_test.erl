@@ -16,10 +16,6 @@
 -compile(export_all).
 -compile(nowarn_export_all).
 
--ifdef(OTP_RELEASE).
--compile({nowarn_deprecated_function, [{ssl, ssl_accept, 2}]}).
--endif.
-
 %% Cowboy listeners.
 
 init_cowboy_tcp(Ref, ProtoOpts, Config) ->
@@ -62,15 +58,17 @@ init_origin(Parent, Transport, Protocol, Fun)
 	Fun(Parent, ClientSocket, gen_tcp);
 init_origin(Parent, tls, Protocol, Fun) ->
 	Opts0 = ct_helper:get_certs_from_ets(),
-	Opts = case Protocol of
+	Opts1 = case Protocol of
 		http2 -> [{alpn_preferred_protocols, [<<"h2">>]}|Opts0];
 		_ -> Opts0
 	end,
+	%% sni_hosts is necessary for SNI tests to succeed.
+	Opts = [{sni_hosts, [{net_adm:localhost(), []}]}|Opts1],
 	{ok, ListenSocket} = ssl:listen(0, [binary, {active, false}|Opts]),
 	{ok, {_, Port}} = ssl:sockname(ListenSocket),
 	Parent ! {self(), Port},
-	{ok, ClientSocket} = ssl:transport_accept(ListenSocket, 5000),
-	ok = ssl:ssl_accept(ClientSocket, 5000),
+	{ok, ClientSocket0} = ssl:transport_accept(ListenSocket, 5000),
+	{ok, ClientSocket} = ssl:handshake(ClientSocket0, 5000),
 	case Protocol of
 		http2 ->
 			{ok, <<"h2">>} = ssl:negotiated_protocol(ClientSocket),
