@@ -16,10 +16,10 @@ a remote endpoint. This Gun connection is owned by a user
 process that is called the _owner_ of the connection, and is
 managed by the supervision tree of the `gun` application.
 
-The owner process communicates with the Gun connection
+Any process can communicate with the Gun connection
 by calling functions from the module `gun`. All functions
 perform their respective operations asynchronously. The Gun
-connection will send Erlang messages to the owner process
+connection will send Erlang messages to the calling process
 whenever needed.
 
 When the remote endpoint closes the connection, Gun attempts
@@ -54,6 +54,12 @@ form of a map.
 ----
 {ok, ConnPid} = gun:open("example.org", 8443, #{transport => tls}).
 ----
+
+When using TLS you may want to tweak the
+http://erlang.org/doc/man/ssl_app.html#configuration[configuration]
+for the `ssl` application, in particular the `session_lifetime`
+and `session_cache_client_max` to limit the amount of memory
+used for the TLS sessions cache.
 
 === Waiting for the connection to be established
 

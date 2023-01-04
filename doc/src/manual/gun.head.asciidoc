@@ -19,9 +19,9 @@ head(ConnPid, Path, Headers, ReqOpts)
 
 ConnPid   :: pid()
 Path      :: iodata()
-Headers   :: [{binary(), iodata()}]
+Headers   :: gun:req_headers()
 ReqOpts   :: gun:req_opts()
-StreamRef :: reference()
+StreamRef :: gun:stream_ref()
 ----
 
 Get headers of a resource representation.

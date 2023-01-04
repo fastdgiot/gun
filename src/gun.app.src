@@ -1,9 +1,0 @@
-{application, 'gun', [
-	{description, "HTTP/1.1, HTTP/2 and Websocket client for Erlang/OTP."},
-	{vsn, "git"},
-	{modules, []},
-	{registered, [gun_sup]},
-	{applications, [kernel,stdlib,ssl,cowlib]},
-	{mod, {gun_app, []}},
-	{env, []}
-]}.
